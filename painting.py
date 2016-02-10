@@ -3,8 +3,8 @@
 from enum import Enum
 
 class Cell(Enum):
-    painted = 1
-    clear = 2
+    painted = '#'
+    clear = '.'
 
 class Surface:
     def __init__(self):
@@ -18,19 +18,21 @@ class Surface:
             self.columns = int(self.columns)
             for lineNb, line in enumerate(f.readlines()):
                 if lineNb >= self.rows:
-                    raise Exception
+                    raise Exception("Line number out of bounds")
                 line = line.rstrip('\n')
+                self.matrix[lineNb] = {}
                 for columnNb, cell in enumerate(line):
                     if columnNb >= self.columns:
-                        raise Exception
-                    self.matrix[lineNb] = {}
-                    if cell == '#':
-                        self.matrix[lineNb][columnNb] = Cell.painted
-                    elif cell == '.':
-                        self.matrix[lineNb][columnNb] = Cell.clear
-                    else:
-                        print(cell)
-                        raise Exception
+                        raise Exception("Column number out of bounds")
+                    self.matrix[lineNb][columnNb] = Cell(cell)
+    def __str__(self):
+        out = ""
+        for i in range(self.rows):
+            for j in range(self.columns):
+                out += self.matrix[i][j].value
+            out += '\n'
+        return out
 
 s = Surface()
 s.import_from_file('simple.in')
+print(s)
