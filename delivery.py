@@ -14,6 +14,14 @@ class Order:
         self.nb = i             # Order number (ID)
         self.productsNb = n     # Number of products in order
         self.products = {}      # Number of each product in order
+    def getDelivered(self, productID, quantity):
+        self.products[productID] -= quantiy
+        if self.products[productID] == 0:
+            del(self.products[productID])
+        elif self.products[productID] < 0:
+            raise Exception("Delivered too much of a product !")
+    def satisfied(self):
+        return self.products == {}
 
 class Map:
     def import_from_file(self, filename):
@@ -84,6 +92,8 @@ class Map:
         #    out += '\n'
         return out
 
+filename = "mother_of_all_warehouses.in"
+#filename = "busy_day.in"
 s = Map()
-s.import_from_file('mother_of_all_warehouses.in')
+s.import_from_file(filename)
 print(s)
