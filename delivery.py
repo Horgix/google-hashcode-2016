@@ -1,19 +1,19 @@
 #! /usr/bin/env python3
 
-from enum import Enum
-
-class Cell(Enum):
-    painted = '#'
-    clear = '.'
-
 class Warehouse:
-    def __init__(self, nb, x, y):
-        self.x = x
-        self.y = y
-        self.nb = nb
-        self.products = {}
+    def __init__(self, nb, r, c):
+        self.row = r            # Warehouse position row
+        self.column = c         # Warehouse position column
+        self.nb = nb            # Warehouse number (ID)
+        self.products = {}      # Number of each product in stock
 
-#class Order:
+class Order:
+    def __init__(self, i, n, r, c):
+        self.row = r            # Order destination row
+        self.colum = c          # Order destination column
+        self.nb = i             # Order number (ID)
+        self.productsNb = n     # Number of products in order
+        self.products = {}      # Number of each product in order
 
 class Map:
     def import_from_file(self, filename):
@@ -46,19 +46,26 @@ class Map:
                             str(products) + " vs " + str(self.productsNb))
                 for pnb, availables in enumerate(products):
                     self.warehouses[i].products[pnb] = availables
+            # Parse orders section
+            self.ordersNb = int(f.readline())
+            self.orders = {}
+            for i in range(self.ordersNb):
+                dr, dc = tuple([int(x) for x in f.readline().split()])
+                items = int(f.readline())
+                self.orders[i] = Order(i, items, dr, dc)
+                ps = [int(x) for x in f.readline().split()]
+                if len(ps) != items:
+                    raise Exception("Orders nb wrong somewhere")
+                for p in ps:
+                    if not p in self.orders[i].products:
+                        self.orders[i].products[p] = 1
+                    else:
+                        self.orders[i].products[p] += 1
+            # End of parsing
+            remainingLines = f.readlines()
+            if remainingLines != []:
+                raise Exception("Didn't parse every line")
 
-
-            #self.rows = int(self.rows)
-            #self.columns = int(self.columns)
-            #for lineNb, line in enumerate(f.readlines()):
-            #    if lineNb >= self.rows:
-            #        raise Exception("Line number out of bounds")
-            #    line = line.rstrip('\n')
-            #    self.matrix[lineNb] = {}
-            #    for columnNb, cell in enumerate(line):
-            #        if columnNb >= self.columns:
-            #            raise Exception("Column number out of bounds")
-            #        self.matrix[lineNb][columnNb] = Cell(cell)
     def __str__(self):
         out = ""
         out += "Rows: " + str(self.rows) + "\n"
@@ -69,6 +76,8 @@ class Map:
         out += "Products number: " + str(self.productsNb) + "\n"
         #for pnb, w in self.productsWeight.items():
         #    out += "Product " + str(pnb) + " weight = " + str(w) + "\n"
+        out += "Warehouses number: " + str(self.warehousesNb) + "\n"
+        out += "Orders number: " + str(self.ordersNb) + "\n"
         #for i in range(self.rows):
         #    for j in range(self.columns):
         #        out += self.matrix[i][j].value
