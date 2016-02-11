@@ -3,6 +3,7 @@
 from enum import Enum
 from cmath import sqrt
 from math import ceil
+from math import floor
 
 class Warehouse:
     def __init__(self, nb, r, c):
@@ -12,17 +13,21 @@ class Warehouse:
         self.products = {}      # Number of each product in stock
     def retrieveProduct(self, productID, quantity):
         self.products[productID] -= quantity
+        ##print("Warehouse " + str(self.nb) + " was retrieved of "
+        ##        + str(quantity) + " products " + str(productID))
         if self.products[productID] < 0:
             raise Exception("Retrieved too much of a product !")
 
 class Order:
     def __init__(self, i, n, r, c):
         self.row = r            # Order destination row
-        self.colum = c          # Order destination column
+        self.column = c         # Order destination column
         self.nb = i             # Order number (ID)
         self.productsNb = n     # Number of products in order
         self.products = {}      # Number of each product in order
     def getDelivered(self, productID, quantity):
+        ##print("Order " + str(self.nb) + " got delivered " + str(quantity)
+        ##        + " of product " + str(productID))
         self.products[productID] = self.products[productID] - quantity
         if self.products[productID] == 0:
             del(self.products[productID])
@@ -31,12 +36,14 @@ class Order:
     def isSatisfied(self):
         return self.products == {}
     def __str__(self):
-        return "Order " + str(self.nb)# + " = " + str(self.products)
+        return "Order " + str(self.nb) + " = " + str(self.products)
 
 class DroneStatus(Enum):
     Flying = 1
     AtWarehouse = 2
-    AtDestination = 2
+    AtDestination = 3
+    Loaded = 4
+    Delivered = 5
 
 class Drone:
     def __init__(self, n, r, c, m):
@@ -47,35 +54,51 @@ class Drone:
         self.products = {}      # Quantity of each product that the drone carries
         self.maximumLoad = m
         self.weight = 0
+        self.warehouseNb = 0    # Warehouse nb where the drone is
+        self.dest = (0, 0)      # Destination it (will) fly to
+        self.order = 0          # Order being processed
     def pickProductToDeliver(self, fieldmap):
         order = [o for onb, o in fieldmap.orders.items() if not o.isSatisfied()][0]
         # Pick a product
         ## Pick first product to be delivered
         (prod, quantity) = [(pnb, quantity) for pnb, quantity in order.products.items() if quantity > 0][0]
         pweight = fieldmap.productsWeight[prod]
-        maxCarry = self.maximumLoad / pweight
+        maxCarry = (self.maximumLoad - self.weight) / (pweight * quantity)
         if maxCarry >= quantity:
             toPick = quantity
         else:
             toPick = floor(maxCarry)
         fieldmap.orders[order.nb].getDelivered(prod, toPick)
-        print("Drone " + str(self.nb) + " is going to pick " + str(toPick)
-                + " items of product " + str(prod) + " for order "
-                + str(order))
-        return (prod, toPick)
+        ##print("Drone " + str(self.nb) + " is going to pick " + str(toPick)
+        ##        + " items of product " + str(prod) + " for order "
+        ##        + str(order.nb))
+        return (order.nb, prod, toPick)
 
     def load(self, productID, quantity, weight):
-        if self.status != DroneStatus.AtWarehouse:
-            raise Exception("Drone must be at a warehouse to load stuff")
+        #if self.status != DroneStatus.AtWarehouse:
+        #    raise Exception("Drone must be at a warehouse to load stuff")
         if not productID in self.products:
             self.products[productID] = 0
         self.products[productID] += quantity
         self.weight += quantity * weight
-        if self.weight > maximumLoad:
+        if self.weight > self.maximumLoad:
+            print("Unit weight: " + str(weight))
+            print("Quantity: " + str(quantity))
+            print("Self weight: " + str(self.weight))
+            print("Max load: " + str(self.maximumLoad))
             raise Exception("Drone overloaded")
+
+        ##print("Drone " + str(self.nb) + " was loaded with " + str(quantity)
+        ##        + " products " + str(productID))
     def deliver(self):
-        if self.status != DroneStatus.AtDestination:
-            raise Exception("Drone must be at a destination to deliver stuff")
+        pass
+        #print(' '.join([str(self.nb), 'D', self.
+        ##print("Drone " + str(self.nb) + " delivers order " + str(self.order))
+        #if self.status != DroneStatus.AtDestination:
+        #    raise Exception("Drone must be at a destination to deliver stuff")
+    def flyToDestination(self):
+        pass
+        ##print("Drone " + str(self.nb) + " is flying to dest " + str(self.dest))
 
 class Map:
     def import_from_file(self, filename):
@@ -122,7 +145,7 @@ class Map:
                     if not p in self.orders[i].products:
                         self.orders[i].products[p] = 0
                     self.orders[i].products[p] += 1
-                print(self.orders[i])
+                ##print(self.orders[i])
             # End of parsing
             remainingLines = f.readlines()
             if remainingLines != []:
@@ -152,8 +175,10 @@ class Map:
         #        out += self.matrix[i][j].value
         #    out += '\n'
         return out
-    def getNumberOfSatisfiedOrders(self):
-        return len([o for onb, o in self.orders.items() if o.isSatisfied()])
+    def getNumberOfUnSatisfiedOrders(self):
+        v = len([o for onb, o in self.orders.items() if not o.isSatisfied()])
+        ##print("Unsatisfied orders: " + str(v))
+        return v
     #def processTurn(self):
     def findWarehouseWithEnoughProducts(self, productID, quantity):
         for wnb, w in self.warehouses.items():
@@ -163,10 +188,35 @@ class Map:
         raise Exception("Product not available in warehouses")
     def loadProduct(self, droneID, warehouseID, productID, quantity):
         self.warehouses[warehouseID].retrieveProduct(productID, quantity)
-        self.drones[droneID].loadWith(productID, quantity)
+        self.drones[droneID].load(productID, quantity,
+                self.productsWeight[productID])
+        print(' '.join([str(droneID), 'L', str(warehouseID), str(productID), str(quantity)]))
     def processTurn(self):
-        for drone in [d for dnb, d in self.drones.items() if d.status == DroneStatus.AtWarehouse]:
-            drone.pickProductToDeliver(self)
+        turns = 0
+        while(self.getNumberOfUnSatisfiedOrders() != 0 and turns < 50):
+            turns += 1
+            for drone in [d for dnb, d in self.drones.items() if (d.status == DroneStatus.AtWarehouse
+                or d.status == DroneStatus.Delivered)]:
+                onb, prod, quantity = drone.pickProductToDeliver(self)
+                wnb = self.findWarehouseWithEnoughProducts(prod, quantity)
+                if wnb == drone.warehouseNb:
+                    self.loadProduct(drone.nb, wnb, prod, quantity)
+                    drone.status = DroneStatus.Loaded
+                    drone.order = onb
+                    drone.dest = (self.orders[onb].row, self.orders[onb].column)
+            for drone in [d for dnb, d in self.drones.items() if d.status == DroneStatus.Loaded]:
+                drone.flyToDestination()
+                drone.status = DroneStatus.AtDestination
+            for drone in [d for dnb, d in self.drones.items() if d.status == DroneStatus.AtDestination]:
+                for pnb, quantity in drone.products.items() :
+                    #self.orders[onb].getDelivered(pnb, quantity)
+                    print(' '.join([str(drone.nb), 'D', str(drone.order),
+                        str(pnb), str(quantity)]))
+                    drone.deliver()
+                    drone.status = DroneStatus.Delivered
+
+
+
 
 def flightLength(startr, startc, endr, endc):
     v1 = (startr - endr)
@@ -181,6 +231,5 @@ filename = "mother_of_all_warehouses.in"
 #filename = "busy_day.in"
 s = Map()
 s.import_from_file(filename)
-print(s)
-print(s.getNumberOfSatisfiedOrders())
+#print(s)
 s.processTurn()
