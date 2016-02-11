@@ -1,6 +1,8 @@
 #! /usr/bin/env python3
 
 from enum import Enum
+from cmath import sqrt
+from math import ceil
 
 class Warehouse:
     def __init__(self, nb, r, c):
@@ -13,7 +15,6 @@ class Warehouse:
         if self.products[productID] < 0:
             raise Exception("Retrieved too much of a product !")
 
-
 class Order:
     def __init__(self, i, n, r, c):
         self.row = r            # Order destination row
@@ -22,7 +23,7 @@ class Order:
         self.productsNb = n     # Number of products in order
         self.products = {}      # Number of each product in order
     def getDelivered(self, productID, quantity):
-        self.products[productID] -= quantity
+        self.products[productID] = self.products[productID] - quantity
         if self.products[productID] == 0:
             del(self.products[productID])
         elif self.products[productID] < 0:
@@ -30,23 +31,51 @@ class Order:
     def isSatisfied(self):
         return self.products == {}
     def __str__(self):
-        return "Order " + str(self.nb) + " = " + str(self.products)
+        return "Order " + str(self.nb)# + " = " + str(self.products)
 
 class DroneStatus(Enum):
     Flying = 1
     AtWarehouse = 2
+    AtDestination = 2
 
 class Drone:
-    def __init__(self, n, r, c):
+    def __init__(self, n, r, c, m):
         self.row = r            # Drone current row
         self.colum = c          # Drone current column
         self.nb = n             # Drone number (ID)
         self.status = DroneStatus.AtWarehouse
         self.products = {}      # Quantity of each product that the drone carries
-    def loadWith(self, productID, quantity):
+        self.maximumLoad = m
+        self.weight = 0
+    def pickProductToDeliver(self, fieldmap):
+        order = [o for onb, o in fieldmap.orders.items() if not o.isSatisfied()][0]
+        # Pick a product
+        ## Pick first product to be delivered
+        (prod, quantity) = [(pnb, quantity) for pnb, quantity in order.products.items() if quantity > 0][0]
+        pweight = fieldmap.productsWeight[prod]
+        maxCarry = self.maximumLoad / pweight
+        if maxCarry >= quantity:
+            toPick = quantity
+        else:
+            toPick = floor(maxCarry)
+        fieldmap.orders[order.nb].getDelivered(prod, toPick)
+        print("Drone " + str(self.nb) + " is going to pick " + str(toPick)
+                + " items of product " + str(prod) + " for order "
+                + str(order))
+        return (prod, toPick)
+
+    def load(self, productID, quantity, weight):
+        if self.status != DroneStatus.AtWarehouse:
+            raise Exception("Drone must be at a warehouse to load stuff")
         if not productID in self.products:
             self.products[productID] = 0
         self.products[productID] += quantity
+        self.weight += quantity * weight
+        if self.weight > maximumLoad:
+            raise Exception("Drone overloaded")
+    def deliver(self):
+        if self.status != DroneStatus.AtDestination:
+            raise Exception("Drone must be at a destination to deliver stuff")
 
 class Map:
     def import_from_file(self, filename):
@@ -103,7 +132,7 @@ class Map:
             startr = self.warehouses[0].row
             startc = self.warehouses[0].column
             for i in range(self.dronesNb):
-                self.drones[i] = Drone(i, startr, startc)
+                self.drones[i] = Drone(i, startr, startc, self.maximumLoad)
 
 
     def __str__(self):
@@ -135,6 +164,18 @@ class Map:
     def loadProduct(self, droneID, warehouseID, productID, quantity):
         self.warehouses[warehouseID].retrieveProduct(productID, quantity)
         self.drones[droneID].loadWith(productID, quantity)
+    def processTurn(self):
+        for drone in [d for dnb, d in self.drones.items() if d.status == DroneStatus.AtWarehouse]:
+            drone.pickProductToDeliver(self)
+
+def flightLength(startr, startc, endr, endc):
+    v1 = (startr - endr)
+    if v1 < 0:
+        v1 *= -1
+    v2 = (startc - endc)
+    if v2 < 0:
+        v2 *= -1
+    return ceil(sqrt((v1 * v1) + (v2 * v2)))
 
 filename = "mother_of_all_warehouses.in"
 #filename = "busy_day.in"
@@ -142,3 +183,4 @@ s = Map()
 s.import_from_file(filename)
 print(s)
 print(s.getNumberOfSatisfiedOrders())
+s.processTurn()
